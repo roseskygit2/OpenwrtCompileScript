@@ -570,13 +570,13 @@ description_if(){
    	cd
 	clear
 	echo "开始检测系统"
-	curl -I -m 2 -s -w "%{http_code}\n" -o /dev/null  www.baidu.com
-	if [[ "$?" == "0" ]]; then
-		clear && echo -e  "$green已经安装curl$white"
-	else
+	curl_if=$(dpkg -l | grep -o "curl" |sed -n '1p' | wc -l)
+	if [[ "$curl_if" == "0" ]]; then
 		clear && echo "安装一下脚本用的依赖（注：不是openwrt的依赖而是脚本本身）"
 		sudo apt update
 		sudo apt install curl -y
+	else
+		clear && echo -e  "$green已经安装curl$white"
 	fi
 
 	#添加hosts(解决golang下载慢的问题)
@@ -1285,7 +1285,7 @@ source_lean() {
 		else
 			sed -i "s/default-settings luci luci-app-ddns luci-app-upnp luci-app-adbyby-plus luci-app-autoreboot/default-settings luci luci-app-adbyby-plus luci-app-autoreboot luci-app-serverchan luci-app-diskman luci-app-passwall luci-app-fileassistant/g" include/target.mk
 
-			sed -i "s/luci-app-sfe luci-app-flowoffload luci-app-nlbwmon luci-app-accesscontrol luci-app-cpufreq/luci-app-sfe luci-app-flowoffload luci-app-nlbwmon luci-app-accesscontrol luci-app-frpc luci-app-ttyd luci-app-netdata luci-app-dockerman lm-sensors autocore #tr_ok/g" include/target.mk
+			sed -i "s/luci-app-sfe luci-app-flowoffload luci-app-nlbwmon luci-app-accesscontrol luci-app-cpufreq/luci-app-sfe luci-app-flowoffload luci-app-nlbwmon luci-app-accesscontrol luci-app-frpc luci-app-ttyd luci-app-netdata luci-app-dockerman luci-app-rclone lm-sensors autocore #tr_ok/g" include/target.mk
 
 		fi	
 		
@@ -1460,14 +1460,12 @@ source_lean() {
 			echo ""
 		fi
 
-		#删除frps makefilr部分代码
-		frps_makefile=$(grep "#frps_makefile" package/lean/luci-app-frps/Makefile | wc -l )
-		if [[ "$frps_makefile" == "1" ]]; then
-			echo ""
-		else
-			sed -i '27,37d' package/lean/luci-app-frps/Makefile
-			sed -i '$a \#frps_makefile' package/lean/luci-app-frps/Makefile
-		fi
+		#默认启用frps
+		sed -i '54a sed -i "s/enabled 0/\\enabled 1/g" /etc/config/frps '  package/lean/default-settings/files/zzz-default-settings
+		sed -i '55a /etc/init.d/frps restart' package/lean/default-settings/files/zzz-default-settings
+		sed -i '56a \   '  package/lean/default-settings/files/zzz-default-settings
+		sed -i "s/enabled 0/\enabled '0'/g" package/lean/default-settings/files/zzz-default-settings
+		sed -i "s/enabled 1/\\enabled '1'/g" package/lean/default-settings/files/zzz-default-settings
 
 		echo -e ">>$green lean版本配置优化完成$white"	
 }
@@ -1570,10 +1568,10 @@ source_Setting_Public() {
 	#frpc替换为27版本
 	source_type=`cat "$HOME/$OW/$SF/tmp/source_type"`
 	if [[ `echo "$source_type" | grep openwrt | wc -l` == "1" ]]; then
-		sed -i "s/PKG_VERSION:=0.31.2/PKG_VERSION:=0.27.0/g" feeds/packages/net/frp/Makefile
+		sed -i "s/PKG_VERSION:=0.33.0/PKG_VERSION:=0.27.0/g" feeds/packages/net/frp/Makefile
 	elif [[ `echo "$source_type" | grep lean | wc -l` == "1" ]]; then
-		sed -i "s/PKG_VERSION:=0.32.1/PKG_VERSION:=0.27.0/g" package/lean/frp/Makefile
-		sed -i "s/PKG_HASH:=3a6ef59163f5a1d41b67908269e924000a8ccb2984e4bdfc18bd1405b5dbaf22/PKG_HASH:=5d2efd5d924c7a7f84a9f2838de6ab9b7d5ca070ab243edd404a5ca80237607c/g" package/lean/frp/Makefile
+		sed -i "s/PKG_VERSION:=0.33.0/PKG_VERSION:=0.27.0/g" package/lean/frp/Makefile
+		sed -i "s/PKG_HASH:=9c773ab4bbd208705c795599c5e69302a379734921c90489ed8ae331c24836cb/PKG_HASH:=5d2efd5d924c7a7f84a9f2838de6ab9b7d5ca070ab243edd404a5ca80237607c/g" package/lean/frp/Makefile
 	else
 		echo ""
 	fi
@@ -1935,6 +1933,12 @@ make_continue_to_compile() {
 		clear && make_continue_to_compile
 		;;
 	esac
+}
+
+#单独的命令模块
+template() {
+	system_install
+	source_download_if
 }
 
 clean() {
